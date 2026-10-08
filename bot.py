@@ -261,7 +261,13 @@ async def main():
             log.info("Bot online: %s", bot.user)
         guild_id = os.getenv("GUILD_ID", "").strip()
         if guild_id:
-            bot.tree.copy_global_to(guild=discord.Object(id=int(guild_id)))
+            guild = discord.Object(id=int(guild_id))
+            bot.tree.copy_global_to(guild=guild)
+            await bot.tree.sync(guild=guild)
+            log.info("Commands synced for guild %s", guild_id)
+        else:
+            await bot.tree.sync()
+            log.info("Global commands synced")
         await bot.start(token)
 
 if __name__ == "__main__":
