@@ -183,9 +183,7 @@ class Controls(discord.ui.View):
         await stop_player(interaction.guild)
         await interaction.followup.send("⏹️ Stopped and disconnected", ephemeral=True)
 
-@bot.tree.command(name="play", description="ค้นหาและเล่นเพลง YouTube")
-@app_commands.describe(query="ชื่อเพลงหรือลิงก์ YouTube")
-async def play(interaction: discord.Interaction, query: str):
+async def _handle_play(interaction: discord.Interaction, query: str):
     if not interaction.guild:
         await interaction.response.send_message("ใช้ใน Server เท่านั้น", ephemeral=True)
         return
@@ -219,6 +217,16 @@ async def play(interaction: discord.Interaction, query: str):
     await interaction.followup.send(f"✅ เพิ่มเพลง: **{discord.utils.escape_markdown(song.title)}**")
     await next_song(interaction.guild)
 
+@bot.tree.command(name="play", description="ค้นหาและเล่นเพลง YouTube")
+@app_commands.describe(query="ชื่อเพลงหรือลิงก์ YouTube")
+async def play(interaction: discord.Interaction, query: str):
+    await _handle_play(interaction, query)
+
+@bot.tree.command(name="ohm", description="ค้นหาและเล่นเพลง YouTube")
+@app_commands.describe(query="ชื่อเพลงหรือลิงก์ YouTube")
+async def ohm(interaction: discord.Interaction, query: str):
+    await _handle_play(interaction, query)
+
 @bot.tree.command(name="queue", description="แสดงคิวเพลง")
 async def queue(interaction: discord.Interaction):
     if not interaction.guild:
@@ -248,26 +256,37 @@ async def leave(interaction: discord.Interaction):
     await stop_player(interaction.guild)
     await interaction.followup.send("ออกจากห้องแล้ว", ephemeral=True)
 
+async def setup_hook():
+    bot.add_view(Controls())
+    guild_id = os.getenv("GUILD_ID", "").strip()
+    if guild_id:
+        guild = discord.Object(id=int(guild_id))
+        bot.tree.copy_global_to(guild=guild)
+        await bot.tree.sync(guild=guild)
+        log.info("Commands synced for guild %s", guild_id)
+    else:
+        await bot.tree.sync()
+        log.info("Global commands synced")
+
+bot.setup_hook = setup_hook
+
 async def main():
     token = os.getenv("DISCORD_TOKEN", "").strip()
     if not token or token == "put_your_discord_bot_token_here":
         raise SystemExit("Set DISCORD_TOKEN in .env")
     if not shutil.which("ffmpeg"):
         raise SystemExit("FFmpeg not installed")
+    @bot.event
+    async def on_ready():
+        log.info("Bot online: %s", bot.user)
+        for guild in bot.guilds:
+            try:
+                bot.tree.copy_global_to(guild=guild)
+                await bot.tree.sync(guild=guild)
+                log.info("Synced commands to guild: %s (%s)", guild.name, guild.id)
+            except Exception as e:
+                log.warning("Could not sync to guild %s: %s", guild.id, e)
     async with bot:
-        bot.add_view(Controls())
-        @bot.event
-        async def on_ready():
-            log.info("Bot online: %s", bot.user)
-        guild_id = os.getenv("GUILD_ID", "").strip()
-        if guild_id:
-            guild = discord.Object(id=int(guild_id))
-            bot.tree.copy_global_to(guild=guild)
-            await bot.tree.sync(guild=guild)
-            log.info("Commands synced for guild %s", guild_id)
-        else:
-            await bot.tree.sync()
-            log.info("Global commands synced")
         await bot.start(token)
 
 if __name__ == "__main__":
